@@ -1,0 +1,15 @@
+# 検証で生成される成果物
+debug_page.html
+observation.json
+embedded_data.json
+next_data_dump.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# macOS / エディタ
+.DS_Store
+.vscode/
