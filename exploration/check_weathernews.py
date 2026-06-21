@@ -1,21 +1,11 @@
 """
 weathernews.jp データ取得 検証スクリプト
 =========================================
-目的: 品川区の天気データが「requests だけ」で取れるかを診断する。
-     （ヘッドレスブラウザが必要かどうかを、インフラを組む前に見極める）
-
-このスクリプトは「データを保存する」ものではなく、「取れるか調べる」ものです。
 判定の流れ:
   [1] ページにアクセスできるか（ステータスコード）
   [2] HTMLに気温などの数値が直接埋まっているか（サーバー描画 or JS描画の判定）
   [3] __NEXT_DATA__ 等の埋め込みJSONがあるか（あれば requests だけでいける＝最短）
   [4] 上記から「次に何をすべきか」を案内
-
-使い方:
-  pip install requests beautifulsoup4
-  python check_weathernews.py
-  # 別のURLで試す場合（DevToolsで見つけた本物のURLを貼る）:
-  python check_weathernews.py "https://weathernews.jp/onebox/..."
 """
 
 import json
@@ -24,15 +14,8 @@ import sys
 import requests
 from bs4 import BeautifulSoup
 
-# ---------------------------------------------------------------------------
-# 設定
-# ---------------------------------------------------------------------------
-# 品川区のピンポイント天気ページ（候補）。
-# ★重要★ このURLは確実ではありません。ブラウザで品川区の天気ページを開き、
-#         アドレスバーのURLをここに貼り替えるか、コマンドライン引数で渡してください。
 DEFAULT_URL = "https://weathernews.jp/onebox/tenki/tokyo/13109/"
 
-# ブラウザのふりをするためのヘッダ（これが無いとブロックされるサイトが多い）
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -42,19 +25,14 @@ HEADERS = {
     "Accept-Language": "ja,en;q=0.9",
 }
 
-# HTML内に「天気データらしさ」があるか判定するキーワード
 KEYWORDS = ["気温", "風速", "降水", "℃", "m/s", "mm"]
 
-# 埋め込みJSONの中から「気温/風速/降水/時刻」っぽいキーを探すためのヒント
 JSON_KEY_HINTS = [
     "temp", "気温", "wind", "風", "rain", "precip", "降水",
     "weather", "hour", "time", "時", "forecast",
 ]
 
 
-# ---------------------------------------------------------------------------
-# ユーティリティ
-# ---------------------------------------------------------------------------
 def find_interesting_keys(obj, path="", hits=None, depth=0, max_depth=8):
     """埋め込みJSONを再帰的に歩いて、天気っぽいキーの場所を列挙する。"""
     if hits is None:
@@ -80,9 +58,6 @@ def find_interesting_keys(obj, path="", hits=None, depth=0, max_depth=8):
     return hits
 
 
-# ---------------------------------------------------------------------------
-# メイン
-# ---------------------------------------------------------------------------
 def main():
     url = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_URL
 
@@ -91,7 +66,6 @@ def main():
     print("=" * 64)
     print(f"[1] アクセス先:\n    {url}\n")
 
-    # --- アクセス ---
     try:
         res = requests.get(url, headers=HEADERS, timeout=15)
     except requests.RequestException as e:
@@ -116,21 +90,18 @@ def main():
 
     soup = BeautifulSoup(html, "html.parser")
 
-    # --- [3] キーワードがHTMLに直接あるか ---
     print("[3] HTMLに天気っぽいキーワードが直接含まれるか:")
     keyword_found = {kw: (kw in html) for kw in KEYWORDS}
     for kw, ok in keyword_found.items():
         print(f"    {'○' if ok else '×'} {kw}")
     print()
 
-    # --- [4] テーブルの数 ---
     tables = soup.find_all("table")
     print(f"[4] <table> タグの数: {len(tables)}")
     if tables:
         print("    → 表形式で埋まっている可能性。debug_page.html を確認。")
     print()
 
-    # --- [5] 埋め込みJSONを探す（最重要）---
     print("[5] 埋め込みJSON (__NEXT_DATA__ 等) の有無:")
     embedded = None
     source_label = None
@@ -167,7 +138,6 @@ def main():
         print("    × 埋め込みJSONは見つかりませんでした。")
     print()
 
-    # --- 総合判定 ---
     print("=" * 64)
     print(" 判定")
     print("=" * 64)

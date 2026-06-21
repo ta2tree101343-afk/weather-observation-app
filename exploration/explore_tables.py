@@ -4,11 +4,6 @@ debug_page.html 表構造 調査スクリプト
 check_weathernews.py が保存した debug_page.html を読み込み、
 5つの <table> の中身を要約する。どのテーブルが「1時間ごとデータ」で、
 気温/風速/降水量がどの行・どの列にあるかを特定するのが目的。
-
-使い方:
-  python explore_tables.py
-  # 別ファイルを指定する場合:
-  python explore_tables.py debug_page.html
 """
 
 import sys
@@ -22,10 +17,8 @@ def summarize_table(index, table):
     print("=" * 60)
     print(f"[table {index}]")
 
-    # class名（セレクタを書くときの手がかりになる）
     print(f"  class: {table.get('class')}")
 
-    # テーブルの直前にある見出し（このテーブルが何なのかのヒント）
     heading = table.find_previous(["h1", "h2", "h3", "h4", "caption"])
     if heading:
         print(f"  近くの見出し: {heading.get_text(strip=True)[:50]}")
@@ -33,12 +26,10 @@ def summarize_table(index, table):
     rows = table.find_all("tr")
     print(f"  行数(tr): {len(rows)}")
 
-    # このテーブルに含まれる天気キーワード
     text = table.get_text(" ", strip=True)
     hits = [k for k in KEYWORDS if k in text]
     print(f"  含まれるキーワード: {hits}")
 
-    # 先頭の数行を、セル単位で表示（列の並びを把握する）
     print("  --- 中身（先頭6行・各行先頭12セル）---")
     for r, tr in enumerate(rows[:6]):
         cells = [c.get_text(strip=True) for c in tr.find_all(["th", "td"])]
@@ -62,7 +53,6 @@ def main():
     for i, table in enumerate(tables):
         summarize_table(i, table)
 
-    # 補足: テーブル以外に「℃が複数並ぶ行」があれば、そこに時系列データがあるかも
     print("=" * 60)
     print("[補足] ℃ を3個以上含む要素（テーブル外に時系列がある場合の手がかり）:")
     found = 0

@@ -5,14 +5,10 @@ class="dataTable"（実況天気・観測値）から
 「日時・気温・風速・降水量（＋風向）」を構造化データとして抽出する。
 
 ポイント:
-  - このテーブルは予報ではなく「観測済みの過去1時間ごとの値」＝課題の「過去データ」。
+  - このテーブルは予報ではなく「観測済みの過去1時間ごとの値」=課題の「過去データ」。
   - 時刻欄は「12時」「24時」のように"時"しか無く日付が無いので、
     新しい行→古い行の並びを使って日付を復元する（時が増えたら前日に繰り下げる）。
   - 「24時」は 0:00 として扱う。
-
-使い方:
-  python parse_weather.py                       # debug_page.html を読む
-  python parse_weather.py debug_page.html       # ファイル指定
 """
 
 import json
@@ -55,7 +51,6 @@ def parse_observation_table(html, base_date=None):
         if len(cells) < 5:
             continue
 
-        # 時刻（"12時" / "24時" → 数字だけ取り出す）
         digits = "".join(ch for ch in cells[0] if ch.isdigit())
         if not digits:
             continue
