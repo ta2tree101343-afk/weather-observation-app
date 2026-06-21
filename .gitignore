@@ -13,3 +13,7 @@ venv/
 # macOS / エディタ
 .DS_Store
 .vscode/
+
+# SAM ビルド生成物
+.aws-sam/
+response.json
