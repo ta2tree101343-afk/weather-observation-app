@@ -1,0 +1,63 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  東京都の気象データ収集アプリ（バックエンド）
+  フェーズ①: DynamoDB + Collector Lambda + EventBridge Scheduler
+
+Globals:
+  Function:
+    Runtime: python3.13
+    Architectures:
+      - arm64          # x86_64より安く・速い。特に理由がなければarm64でよい
+    Timeout: 120       # 23区を順次取得する想定。デフォルト3秒では足りないので延ばす
+    MemorySize: 256
+
+Resources:
+
+  # SAMの SimpleTable は「PKのみ」でソートキーを持てないため、
+  # 複合キー(PK=区, SK=日時)が必要な今回は DynamoDB::Table を直接使う。
+  WeatherTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: WeatherObservations
+      BillingMode: PAY_PER_REQUEST    # オンデマンド。容量設計不要で低トラフィックなら実質無料
+      AttributeDefinitions:
+        - AttributeName: ward
+          AttributeType: S
+        - AttributeName: datetime
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ward
+          KeyType: HASH
+        - AttributeName: datetime
+          KeyType: RANGE
+      # ↑ PK+SK の組み合わせが一意になるため、同じ区・同じ日時の put_item は
+      #   「上書き」になり、日時×地域の重複が条件式なしで自然に防げる。
+
+  CollectorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: weather-collector
+      CodeUri: src/collector/         # ← sam build 時にこのフォルダが必要
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref WeatherTable
+      Policies:
+        # SAMの定型ポリシー。このテーブルへの読み書き権限だけを最小限で付与する
+        - DynamoDBCrudPolicy:
+            TableName: !Ref WeatherTable
+      Events:
+        HourlySchedule:
+          Type: ScheduleV2             # EventBridge Scheduler（旧EventBridge Ruleより推奨）
+          Properties:
+            ScheduleExpression: rate(1 hour)
+            ScheduleExpressionTimezone: Asia/Tokyo
+
+Outputs:
+  WeatherTableName:
+    Description: 作成されたDynamoDBテーブル名
+    Value: !Ref WeatherTable
+  CollectorFunctionName:
+    Description: 収集Lambdaの関数名（手動実行の確認に使う）
+    Value: !Ref CollectorFunction
