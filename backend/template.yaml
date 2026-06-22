@@ -3,24 +3,34 @@ Transform: AWS::Serverless-2016-10-31
 Description: >
   東京都の気象データ収集アプリ（バックエンド）
   フェーズ①: DynamoDB + Collector Lambda + EventBridge Scheduler
+  フェーズ②: 閲覧API（HTTP API + API Lambda）
+
+Parameters:
+  AllowedOrigin:
+    Type: String
+    Default: http://localhost:5173
+    Description: >
+      CORSで許可するオリジン。フロントをCloudFrontに公開したら、
+      sam deploy 時にこの値をCloudFrontのURLへ差し替える（コード変更不要）。
 
 Globals:
   Function:
     Runtime: python3.13
     Architectures:
-      - arm64          # x86_64より安く・速い。特に理由がなければarm64でよい
-    Timeout: 120       # 23区を順次取得する想定。デフォルト3秒では足りないので延ばす
+      - arm64
+    Timeout: 120
     MemorySize: 256
 
 Resources:
 
-  # SAMの SimpleTable は「PKのみ」でソートキーを持てないため、
-  # 複合キー(PK=区, SK=日時)が必要な今回は DynamoDB::Table を直接使う。
+  # ==========================================================
+  # データ保存先（DynamoDB）
+  # ----------------------------------------------------------
   WeatherTable:
     Type: AWS::DynamoDB::Table
     Properties:
       TableName: WeatherObservations
-      BillingMode: PAY_PER_REQUEST    # オンデマンド。容量設計不要で低トラフィックなら実質無料
+      BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: ward
           AttributeType: S
@@ -31,28 +41,76 @@ Resources:
           KeyType: HASH
         - AttributeName: datetime
           KeyType: RANGE
-      # ↑ PK+SK の組み合わせが一意になるため、同じ区・同じ日時の put_item は
-      #   「上書き」になり、日時×地域の重複が条件式なしで自然に防げる。
 
+  # ==========================================================
+  # 収集Lambda（Collector）
+  # ==========================================================
   CollectorFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: weather-collector
-      CodeUri: src/collector/         # ← sam build 時にこのフォルダが必要
+      CodeUri: src/collector/
       Handler: app.lambda_handler
       Environment:
         Variables:
           TABLE_NAME: !Ref WeatherTable
       Policies:
-        # SAMの定型ポリシー。このテーブルへの読み書き権限だけを最小限で付与する
         - DynamoDBCrudPolicy:
             TableName: !Ref WeatherTable
       Events:
         HourlySchedule:
-          Type: ScheduleV2             # EventBridge Scheduler（旧EventBridge Ruleより推奨）
+          Type: ScheduleV2
           Properties:
             ScheduleExpression: rate(1 hour)
             ScheduleExpressionTimezone: Asia/Tokyo
+
+  # ==========================================================
+  # 閲覧API の受付（API Gateway HTTP API）
+  # ----------------------------------------------------------
+  WeatherApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        AllowOrigins:
+          - !Ref AllowedOrigin
+        AllowMethods:
+          - GET
+          - OPTIONS
+        AllowHeaders:
+          - "*"
+
+  # ==========================================================
+  # 閲覧Lambda（API）— 読み取り役
+  # ----------------------------------------------------------
+  # GET /wards         … 区の一覧（画面のセレクタ用）
+  # GET /observations  … 指定区の観測データ（?ward=13109）
+  # 1つの関数で2ルートを受け、関数側でパスを見て処理を振り分ける。
+  # ==========================================================
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: weather-api
+      CodeUri: src/api/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref WeatherTable
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref WeatherTable
+      Events:
+        WardsRoute:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref WeatherApi
+            Method: GET
+            Path: /wards
+        ObservationsRoute:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref WeatherApi
+            Method: GET
+            Path: /observations
 
 Outputs:
   WeatherTableName:
@@ -61,3 +119,6 @@ Outputs:
   CollectorFunctionName:
     Description: 収集Lambdaの関数名（手動実行の確認に使う）
     Value: !Ref CollectorFunction
+  ApiBaseUrl:
+    Description: 閲覧APIのベースURL（フロントのAPI接続先に使う）
+    Value: !Sub "https://${WeatherApi}.execute-api.${AWS::Region}.amazonaws.com"
