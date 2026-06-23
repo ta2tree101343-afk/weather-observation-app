@@ -26,6 +26,9 @@ Resources:
   # ==========================================================
   # データ保存先（DynamoDB）
   # ----------------------------------------------------------
+  # SAMの SimpleTable は「PKのみ」でソートキーを持てないため、
+  # 複合キー(PK=区, SK=日時)が必要な今回は DynamoDB::Table を直接使う。
+  # ==========================================================
   WeatherTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -43,7 +46,22 @@ Resources:
           KeyType: RANGE
 
   # ==========================================================
-  # 収集Lambda（Collector）
+  # 共有Layer（共通コードの置き場）
+  # ----------------------------------------------------------
+  # wards.py（23区の対応表）を1か所にまとめ、収集・閲覧の両Lambdaから使う。
+  # ContentUri配下の python/ の中身が、各Lambdaで import 可能になる。
+  # （src/layers/common/python/wards.py → どちらも from wards import WARDS）
+  # ==========================================================
+  CommonLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: weather-common
+      ContentUri: src/layers/common/
+      CompatibleRuntimes:
+        - python3.13
+
+  # ==========================================================
+  # 収集Lambda（Collector）— 書き込み役
   # ==========================================================
   CollectorFunction:
     Type: AWS::Serverless::Function
@@ -51,6 +69,8 @@ Resources:
       FunctionName: weather-collector
       CodeUri: src/collector/
       Handler: app.lambda_handler
+      Layers:
+        - !Ref CommonLayer
       Environment:
         Variables:
           TABLE_NAME: !Ref WeatherTable
@@ -67,6 +87,9 @@ Resources:
   # ==========================================================
   # 閲覧API の受付（API Gateway HTTP API）
   # ----------------------------------------------------------
+  # HTTP APIはREST APIより安く、CORSをゲートウェイ側で自動処理してくれる。
+  # ブラウザのプリフライト(OPTIONS)もここが面倒を見る。
+  # ==========================================================
   WeatherApi:
     Type: AWS::Serverless::HttpApi
     Properties:
@@ -92,6 +115,8 @@ Resources:
       FunctionName: weather-api
       CodeUri: src/api/
       Handler: app.lambda_handler
+      Layers:
+        - !Ref CommonLayer
       Environment:
         Variables:
           TABLE_NAME: !Ref WeatherTable
