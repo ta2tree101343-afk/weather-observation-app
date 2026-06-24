@@ -1,1 +1,1 @@
-aws-lambda-powertools>=3.0
+aws-lambda-powertools[tracer]>=3.0

@@ -20,6 +20,7 @@ Globals:
       - arm64
     Timeout: 120
     MemorySize: 256
+    Tracing: Active
 
 Resources:
 
@@ -67,6 +68,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: weather-collector
+      Timeout: 420
       CodeUri: src/collector/
       Handler: app.lambda_handler
       Layers:
@@ -77,6 +79,7 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref WeatherTable
+        - AWSXRayDaemonWriteAccess
       Events:
         HourlySchedule:
           Type: ScheduleV2
@@ -123,6 +126,7 @@ Resources:
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref WeatherTable
+        - AWSXRayDaemonWriteAccess
       Events:
         WardsRoute:
           Type: HttpApi
