@@ -1,8 +1,7 @@
-"""閲覧API Lambda（本実装）
+"""閲覧API Lambda
 HTTP API から呼ばれ、パスに応じて2種類の応答を返す。
-  GET /wards                     … 23区の一覧（画面のセレクタ用）
+  GET /wards                     … 23区の一覧
   GET /observations?ward=13109   … 指定区の観測データ（新しい順）
-DynamoDBの数値は Decimal で返るため、JSONにする際 float へ戻す（保存時の逆処理）。
 """
 import json
 import os
@@ -10,6 +9,10 @@ from decimal import Decimal
 
 import boto3
 from boto3.dynamodb.conditions import Key
+from aws_lambda_powertools import Logger, Tracer
+from aws_lambda_powertools.event_handler import APIGatewayHttpResolver
+from aws_lambda_powertools.event_handler.exceptions import BadRequestError, NotFoundError
+from aws_lambda_powertools.utilities.typing import LambdaContext
 
 from wards import WARDS
 
@@ -18,6 +21,8 @@ DEFAULT_LIMIT = 48
 
 dynamodb = boto3.resource("dynamodb")
 table = dynamodb.Table(TABLE_NAME)
+logger = Logger(service="weather-api")
+tracer = Tracer(service="weather-api")
 
 WARD_NAMES = {code: name for code, name in WARDS}
 
@@ -28,31 +33,28 @@ def _decimal_default(obj):
     raise TypeError
 
 
-def _response(status, body):
-    """共通のレスポンス組み立て。CORSヘッダーはAPI Gateway側が付与する。"""
-    return {
-        "statusCode": status,
-        "headers": {"Content-Type": "application/json"},
-        "body": json.dumps(body, ensure_ascii=False, default=_decimal_default),
-    }
+app = APIGatewayHttpResolver(
+    serializer=lambda x: json.dumps(x, default=_decimal_default, ensure_ascii=False)
+)
 
 
-def handle_wards():
-    """23区の一覧を返す"""
+@app.get("/wards")
+def get_wards():
     wards = [{"code": code, "name": name} for code, name in WARDS]
-    return _response(200, {"wards": wards})
+    logger.info("wards list returned", count=len(wards))
+    return {"wards": wards}
 
 
-def handle_observations(params):
-    """指定区の観測データを新しい順で返す"""
-    ward = (params or {}).get("ward")
+@app.get("/observations")
+def get_observations():
+    ward = app.current_event.get_query_string_value("ward")
     if not ward:
-        return _response(400, {"error": "query parameter 'ward' is required"})
+        raise BadRequestError("query parameter 'ward' is required")
     if ward not in WARD_NAMES:
-        return _response(404, {"error": f"unknown ward: {ward}"})
+        raise NotFoundError(f"unknown ward: {ward}")
 
     try:
-        limit = int((params or {}).get("limit", DEFAULT_LIMIT))
+        limit = int(app.current_event.get_query_string_value("limit") or DEFAULT_LIMIT)
     except (TypeError, ValueError):
         limit = DEFAULT_LIMIT
 
@@ -62,20 +64,16 @@ def handle_observations(params):
         Limit=limit,
     )
     items = result.get("Items", [])
-    return _response(200, {
+    logger.info("observations returned", ward=ward, count=len(items))
+    return {
         "ward": ward,
         "ward_name": WARD_NAMES[ward],
         "count": len(items),
         "items": items,
-    })
+    }
 
 
-def lambda_handler(event, context):
-    path = event.get("rawPath", "")
-    params = event.get("queryStringParameters") or {}
-
-    if path == "/wards":
-        return handle_wards()
-    if path == "/observations":
-        return handle_observations(params)
-    return _response(404, {"error": f"not found: {path}"})
+@logger.inject_lambda_context(log_event=True)
+@tracer.capture_lambda_handler
+def lambda_handler(event: dict, context: LambdaContext) -> dict:
+    return app.resolve(event, context)
