@@ -2,6 +2,7 @@
 区コードは weathernews.jp のURL（/onebox/tenki/tokyo/{code}/）に使う。
 画面表示用の名前もここで一元管理する。
 """
+from schemas import Ward
 
 WARDS = [
     ("13101", "千代田区"),
@@ -28,3 +29,20 @@ WARDS = [
     ("13122", "葛飾区"),
     ("13123", "江戸川区"),
 ]
+
+_WARD_MAP: dict[str, str] = {code: name for code, name in WARDS}
+
+
+def is_valid(ward: str) -> bool:
+    return ward in _WARD_MAP
+
+
+def get_name(ward: str) -> str:
+    name = _WARD_MAP.get(ward)
+    if name is None:
+        raise KeyError(f"Unknown ward code: {ward!r}")
+    return name
+
+
+def list_all() -> list[Ward]:
+    return [Ward(code=code, name=name) for code, name in WARDS]
