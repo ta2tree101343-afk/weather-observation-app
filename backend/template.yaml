@@ -141,6 +141,29 @@ Resources:
             Method: GET
             Path: /observations
 
+  # ==========================================================
+  # アラート（Collector 部分失敗の検知）
+  # ----------------------------------------------------------
+  # FailedWardsCount > 0 のとき ALARM 状態になる。
+  # AlarmActions に SNS トピックの ARN を追加すると通知できる。
+  # ==========================================================
+  CollectorPartialFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: weather-collector-partial-failure
+      AlarmDescription: Collector Lambda で一部の区のデータ取得に失敗しました
+      MetricName: FailedWardsCount
+      Namespace: WeatherApp
+      Dimensions:
+        - Name: service
+          Value: weather-collector
+      Statistic: Sum
+      Period: 3600
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+
 Outputs:
   WeatherTableName:
     Description: 作成されたDynamoDBテーブル名

@@ -12,7 +12,8 @@ import time
 from decimal import Decimal
 
 import boto3
-from aws_lambda_powertools import Logger, Tracer
+from aws_lambda_powertools import Logger, Metrics, Tracer
+from aws_lambda_powertools.metrics import MetricUnit
 from aws_lambda_powertools.utilities.typing import LambdaContext
 
 from scraper import scrape_ward
@@ -20,6 +21,7 @@ from wards import WARDS
 
 logger = Logger(service="weather-collector")
 tracer = Tracer(service="weather-collector")
+metrics = Metrics(namespace="WeatherApp", service="weather-collector")
 
 TABLE_NAME = os.environ["TABLE_NAME"]
 SLEEP_SECONDS = 1.5
@@ -53,11 +55,12 @@ def build_item(ward_code, ward_name, record):
 
 @logger.inject_lambda_context
 @tracer.capture_lambda_handler
+@metrics.log_metrics
 def lambda_handler(event: dict, context: LambdaContext) -> dict:
     total_saved = 0
     failed = []
 
-    with table.batch_writer() as batch:
+    with table.batch_writer(overwrite_by_pkeys=["ward", "datetime"]) as batch:
         for code, name in WARDS:
             try:
                 records = scrape_ward(code)
@@ -71,9 +74,14 @@ def lambda_handler(event: dict, context: LambdaContext) -> dict:
             time.sleep(SLEEP_SECONDS)
 
     result = {"saved": total_saved, "failed_wards": failed}
+    metrics.add_metric(name="FailedWardsCount", unit=MetricUnit.Count, value=len(failed))
+
     if len(failed) == len(WARDS):
         logger.error("all wards failed", **result)
         raise RuntimeError(f"全区の取得に失敗しました: {failed}")
 
-    logger.info("collection complete", **result)
+    if failed:
+        logger.warning("collection complete with partial failures", **result)
+    else:
+        logger.info("collection complete", **result)
     return {"statusCode": 200, "body": result}
