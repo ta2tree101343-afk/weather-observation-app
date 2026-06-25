@@ -164,6 +164,71 @@ Resources:
       ComparisonOperator: GreaterThanOrEqualToThreshold
       TreatMissingData: notBreaching
 
+  # ==========================================================
+  # フロント配信（S3 + CloudFront）
+  # ----------------------------------------------------------
+  # ビルド済みフロント(dist)をS3に置き、CloudFront経由で配信する。
+  # S3は非公開のままにし、CloudFrontからのみ OAC で読ませる（直アクセス不可）。
+  # ==========================================================
+  WebBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  WebOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: weather-web-oac
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  WebDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        DefaultRootObject: index.html
+        Origins:
+          - Id: WebBucketOrigin
+            DomainName: !GetAtt WebBucket.RegionalDomainName
+            OriginAccessControlId: !Ref WebOAC
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+        DefaultCacheBehavior:
+          TargetOriginId: WebBucketOrigin
+          ViewerProtocolPolicy: redirect-to-https
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6  # AWS管理 CachingOptimized
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+
+  WebBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref WebBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCloudFrontReadOnly
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub "${WebBucket.Arn}/*"
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${WebDistribution}"
+
 Outputs:
   WeatherTableName:
     Description: 作成されたDynamoDBテーブル名
@@ -174,3 +239,9 @@ Outputs:
   ApiBaseUrl:
     Description: 閲覧APIのベースURL（フロントのAPI接続先に使う）
     Value: !Sub "https://${WeatherApi}.execute-api.${AWS::Region}.amazonaws.com"
+  WebBucketName:
+    Description: フロント配信用S3バケット名（aws s3 sync の宛先）
+    Value: !Ref WebBucket
+  WebURL:
+    Description: 公開URL（CloudFront）
+    Value: !Sub "https://${WebDistribution.DomainName}"
