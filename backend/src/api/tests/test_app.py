@@ -1,10 +1,10 @@
 import json
-from decimal import Decimal
 from unittest.mock import MagicMock, patch
+from botocore.exceptions import ClientError
+from schemas import Observation
 
 
 def make_event(path, query_params=None):
-    """HTTP API v2 形式の最小イベントを組み立てる。"""
     return {
         "version": "2.0",
         "rawPath": path,
@@ -18,8 +18,7 @@ def make_event(path, query_params=None):
     }
 
 
-@patch("app.table")
-def test_get_wards_returns_all_23_wards(_mock_table):
+def test_get_wards_returns_all_23_wards():
     from app import lambda_handler
 
     res = lambda_handler(make_event("/wards"), MagicMock())
@@ -31,8 +30,7 @@ def test_get_wards_returns_all_23_wards(_mock_table):
     assert body["wards"][0] == {"code": "13101", "name": "千代田区"}
 
 
-@patch("app.table")
-def test_get_observations_returns_400_when_ward_missing(_mock_table):
+def test_get_observations_returns_400_when_ward_missing():
     from app import lambda_handler
 
     res = lambda_handler(make_event("/observations"), MagicMock())
@@ -40,8 +38,7 @@ def test_get_observations_returns_400_when_ward_missing(_mock_table):
     assert res["statusCode"] == 400
 
 
-@patch("app.table")
-def test_get_observations_returns_404_for_unknown_ward(_mock_table):
+def test_get_observations_returns_404_for_unknown_ward():
     from app import lambda_handler
 
     res = lambda_handler(make_event("/observations", {"ward": "99999"}), MagicMock())
@@ -49,22 +46,27 @@ def test_get_observations_returns_404_for_unknown_ward(_mock_table):
     assert res["statusCode"] == 404
 
 
-@patch("app.table")
-def test_get_observations_returns_items_with_floats(mock_table):
+def test_unknown_path_returns_404():
     from app import lambda_handler
 
-    mock_table.query.return_value = {
-        "Items": [
-            {
-                "ward": "13101",
-                "datetime": "2026-06-22T10:00:00",
-                "temperature": Decimal("25.5"),
-                "wind_speed": Decimal("3.2"),
-                "wind_direction": "北",
-                "precipitation": Decimal("0.0"),
-            }
-        ]
-    }
+    res = lambda_handler(make_event("/unknown"), MagicMock())
+
+    assert res["statusCode"] == 404
+
+
+@patch("app._repository.get_observations")
+def test_get_observations_returns_items_with_floats(mock_get_obs):
+    from app import lambda_handler
+
+    mock_get_obs.return_value = [
+        Observation(
+            ward="13101",
+            observed_at="2026-06-22T10:00:00",
+            ward_name="千代田区",
+            temperature=25.5,
+            wind_speed=3.2,
+        )
+    ]
 
     res = lambda_handler(make_event("/observations", {"ward": "13101"}), MagicMock())
 
@@ -73,26 +75,64 @@ def test_get_observations_returns_items_with_floats(mock_table):
     assert body["ward"] == "13101"
     assert body["ward_name"] == "千代田区"
     assert body["count"] == 1
+    assert body["items"][0]["datetime"] == "2026-06-22T10:00:00"
+    assert "observed_at" not in body["items"][0]
+    assert "ward" not in body["items"][0]
+    assert "ward_name" not in body["items"][0]
     assert body["items"][0]["temperature"] == 25.5
     assert body["items"][0]["wind_speed"] == 3.2
 
 
-@patch("app.table")
-def test_get_observations_uses_custom_limit(mock_table):
+@patch("app._repository.get_observations")
+def test_get_observations_returns_503_on_throttling(mock_get_obs):
     from app import lambda_handler
 
-    mock_table.query.return_value = {"Items": []}
+    mock_get_obs.side_effect = ClientError(
+        {"Error": {"Code": "ProvisionedThroughputExceededException", "Message": "exceeded"}},
+        "Query",
+    )
 
-    lambda_handler(make_event("/observations", {"ward": "13101", "limit": "10"}), MagicMock())
+    res = lambda_handler(make_event("/observations", {"ward": "13101"}), MagicMock())
 
-    call_kwargs = mock_table.query.call_args.kwargs
-    assert call_kwargs["Limit"] == 10
+    assert res["statusCode"] == 503
 
 
-@patch("app.table")
-def test_unknown_path_returns_404(mock_table):
+@patch("app._repository.get_observations")
+def test_get_observations_returns_500_on_permanent_client_error(mock_get_obs):
     from app import lambda_handler
 
-    res = lambda_handler(make_event("/unknown"), MagicMock())
+    mock_get_obs.side_effect = ClientError(
+        {"Error": {"Code": "AccessDeniedException", "Message": "not authorized"}},
+        "Query",
+    )
 
-    assert res["statusCode"] == 404
+    res = lambda_handler(make_event("/observations", {"ward": "13101"}), MagicMock())
+
+    assert res["statusCode"] == 500
+
+
+@patch("app._repository.get_observations")
+def test_get_observations_returns_500_on_malformed_data(mock_get_obs):
+    from app import lambda_handler
+
+    mock_get_obs.side_effect = KeyError("datetime")
+
+    res = lambda_handler(make_event("/observations", {"ward": "13101"}), MagicMock())
+
+    assert res["statusCode"] == 500
+
+
+@patch("app._repository.get_observations")
+def test_get_observations_omits_none_fields(mock_get_obs):
+    from app import lambda_handler
+
+    mock_get_obs.return_value = [
+        Observation(ward="13101", observed_at="2026-06-22T10:00:00", ward_name="千代田区")
+    ]
+
+    res = lambda_handler(make_event("/observations", {"ward": "13101"}), MagicMock())
+
+    body = json.loads(res["body"])
+    item = body["items"][0]
+    assert "temperature" not in item
+    assert "wind_speed" not in item

@@ -1,0 +1,7 @@
+{
+  "pythonVersion": "3.13",
+  "extraPaths": [
+    "src/layers/common/python",
+    "src/api"
+  ]
+}
