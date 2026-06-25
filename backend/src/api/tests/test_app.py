@@ -1,5 +1,6 @@
 import json
 from unittest.mock import MagicMock, patch
+
 from botocore.exceptions import ClientError
 from schemas import Observation
 

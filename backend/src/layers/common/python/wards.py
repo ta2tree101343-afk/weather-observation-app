@@ -2,6 +2,7 @@
 区コードは weathernews.jp のURL（/onebox/tenki/tokyo/{code}/）に使う。
 画面表示用の名前もここで一元管理する。
 """
+
 from schemas import Ward
 
 WARDS = [

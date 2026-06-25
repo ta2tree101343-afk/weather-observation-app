@@ -7,6 +7,7 @@ weathernews.jp から取得して DynamoDB に保存する。
   - 相手サーバへの負荷を避けるため、区ごとに少し待つ（SLEEP_SECONDS）。
   - 同じ ward + datetime は上書きになるため、重複は自然に防げる。
 """
+
 import os
 import time
 from decimal import Decimal
@@ -15,7 +16,6 @@ import boto3
 from aws_lambda_powertools import Logger, Metrics, Tracer
 from aws_lambda_powertools.metrics import MetricUnit
 from aws_lambda_powertools.utilities.typing import LambdaContext
-
 from scraper import scrape_ward
 from wards import WARDS
 

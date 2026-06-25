@@ -1,6 +1,7 @@
-import pytest
 from decimal import Decimal
 from unittest.mock import MagicMock
+
+import pytest
 from botocore.exceptions import ClientError
 from repositories.weather_repository import WeatherRepository
 
@@ -12,15 +13,17 @@ def make_mock_table(items):
 
 
 def test_get_observations_converts_decimal_to_float():
-    table = make_mock_table([
-        {
-            "ward": "13101",
-            "datetime": "2026-06-22T10:00:00",
-            "ward_name": "千代田区",
-            "temperature": Decimal("25.5"),
-            "wind_speed": Decimal("3.2"),
-        }
-    ])
+    table = make_mock_table(
+        [
+            {
+                "ward": "13101",
+                "datetime": "2026-06-22T10:00:00",
+                "ward_name": "千代田区",
+                "temperature": Decimal("25.5"),
+                "wind_speed": Decimal("3.2"),
+            }
+        ]
+    )
     repo = WeatherRepository(table)
     result = repo.get_observations("13101", 10)
 
@@ -31,9 +34,9 @@ def test_get_observations_converts_decimal_to_float():
 
 
 def test_get_observations_handles_missing_optional_fields():
-    table = make_mock_table([
-        {"ward": "13101", "datetime": "2026-06-22T10:00:00", "ward_name": "千代田区"}
-    ])
+    table = make_mock_table(
+        [{"ward": "13101", "datetime": "2026-06-22T10:00:00", "ward_name": "千代田区"}]
+    )
     repo = WeatherRepository(table)
     result = repo.get_observations("13101", 10)
 
@@ -73,12 +76,16 @@ def test_get_observations_raises_on_missing_required_field():
 
 
 def test_get_observations_raises_on_invalid_float_field():
-    table = make_mock_table([{
-        "ward": "13101",
-        "datetime": "2026-06-22T10:00:00",
-        "ward_name": "千代田区",
-        "temperature": "N/A",
-    }])
+    table = make_mock_table(
+        [
+            {
+                "ward": "13101",
+                "datetime": "2026-06-22T10:00:00",
+                "ward_name": "千代田区",
+                "temperature": "N/A",
+            }
+        ]
+    )
     repo = WeatherRepository(table)
     with pytest.raises((ValueError, TypeError)):
         repo.get_observations("13101", 10)

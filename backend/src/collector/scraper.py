@@ -86,16 +86,19 @@ def parse_observation_table(html, base_date=None):
             current_date -= timedelta(days=1)
         prev_hour = hour
 
-        dt = datetime(current_date.year, current_date.month, current_date.day,
-                      hour, 0, 0, tzinfo=JST)
+        dt = datetime(
+            current_date.year, current_date.month, current_date.day, hour, 0, 0, tzinfo=JST
+        )
 
-        records.append({
-            "datetime": dt.isoformat(),          # 例: 2026-06-20T12:00:00+09:00
-            "temperature": to_float(cells[1]),   # 気温(℃)
-            "wind_speed": to_float(cells[2]),    # 風速(m/s)
-            "wind_direction": cells[3] or None,  # 風向
-            "precipitation": to_float(cells[4]),  # 降水量(mm/h)
-        })
+        records.append(
+            {
+                "datetime": dt.isoformat(),  # 例: 2026-06-20T12:00:00+09:00
+                "temperature": to_float(cells[1]),  # 気温(℃)
+                "wind_speed": to_float(cells[2]),  # 風速(m/s)
+                "wind_direction": cells[3] or None,  # 風向
+                "precipitation": to_float(cells[4]),  # 降水量(mm/h)
+            }
+        )
 
     return records
 
