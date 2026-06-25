@@ -1,0 +1,30 @@
+[project]
+name = "weather-observation-backend"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = []
+
+[tool.uv]
+default-groups = ["dev", "collector", "api"]
+
+[dependency-groups]
+collector = [
+    "requests>=2.33",
+    "beautifulsoup4>=4.13",
+    "aws-lambda-powertools[tracer]>=3.0",
+]
+api = [
+    "aws-lambda-powertools[tracer]>=3.0",
+]
+dev = [
+    "boto3>=1.38",
+    "pytest>=9.0",
+    "ruff>=0.9",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
