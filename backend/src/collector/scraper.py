@@ -52,7 +52,7 @@ def parse_observation_table(html, base_date=None):
     soup = BeautifulSoup(html, "html.parser")
     table = soup.select_one("table.dataTable")
     if table is None:
-        return []
+        raise ValueError("observation table not found: HTML structure may have changed")
 
     rows = table.select("tbody tr")
     if base_date is None:
@@ -61,6 +61,7 @@ def parse_observation_table(html, base_date=None):
 
     records = []
     prev_hour = None
+    first = True
 
     for tr in rows:
         cells = [td.get_text(strip=True) for td in tr.find_all("td")]
@@ -74,8 +75,14 @@ def parse_observation_table(html, base_date=None):
         if hour == 24:  # 24時 = 0:00
             hour = 0
 
-        # 新しい→古い順なので、時が前の行より大きくなったら日付を前日へ
-        if prev_hour is not None and hour > prev_hour:
+        if first:
+            # 最新行の時刻が base_date の現在時刻より後なら、その行はまだ来ていない
+            # = 起点は前日（例: 00:30 に最新行が "23時" → 昨日23:00）
+            if hour > base_date.hour:
+                current_date -= timedelta(days=1)
+            first = False
+        elif prev_hour is not None and hour > prev_hour:
+            # 新しい→古い順なので、時が前の行より大きくなったら日付を前日へ
             current_date -= timedelta(days=1)
         prev_hour = hour
 
