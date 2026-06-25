@@ -3,23 +3,21 @@ HTTP API から呼ばれ、パスに応じて2種類の応答を返す。
   GET /wards                     … 23区の一覧
   GET /observations?ward=13109   … 指定区の観測データ（新しい順）
 """
+
 import json
 import os
 
 import boto3
+import routers.weather as weather_router
 from aws_lambda_powertools import Logger, Tracer
 from aws_lambda_powertools.event_handler import APIGatewayHttpResolver
 from aws_lambda_powertools.utilities.typing import LambdaContext
-
 from repositories.weather_repository import WeatherRepository
-import routers.weather as weather_router
 
 logger = Logger(service="weather-api")
 tracer = Tracer(service="weather-api")
 
-app = APIGatewayHttpResolver(
-    serializer=lambda x: json.dumps(x, ensure_ascii=False)
-)
+app = APIGatewayHttpResolver(serializer=lambda x: json.dumps(x, ensure_ascii=False))
 
 _table = boto3.resource("dynamodb").Table(os.environ["TABLE_NAME"])
 _repository = WeatherRepository(_table)

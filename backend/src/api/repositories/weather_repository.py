@@ -1,6 +1,6 @@
 from aws_lambda_powertools import Logger
-from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Key
+from botocore.exceptions import ClientError
 from schemas import Observation
 
 logger = Logger(service="weather-api", child=True)

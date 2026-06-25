@@ -1,5 +1,6 @@
-import pytest
 from datetime import datetime, timedelta, timezone
+
+import pytest
 from scraper import parse_observation_table
 
 JST = timezone(timedelta(hours=9))
