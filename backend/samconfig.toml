@@ -8,3 +8,4 @@ region = "ap-northeast-1"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
 image_repositories = []
+parameter_overrides = "AllowedOrigin=https://d17h67joyzv011.cloudfront.net"

@@ -193,6 +193,7 @@ Resources:
     Properties:
       DistributionConfig:
         Enabled: true
+        HttpVersion: http2and3
         DefaultRootObject: index.html
         Origins:
           - Id: WebBucketOrigin
@@ -204,6 +205,9 @@ Resources:
           TargetOriginId: WebBucketOrigin
           ViewerProtocolPolicy: redirect-to-https
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6  # AWS管理 CachingOptimized
+          AllowedMethods: [GET, HEAD]
+          CachedMethods: [GET, HEAD]
+          Compress: true
         CustomErrorResponses:
           - ErrorCode: 403
             ResponseCode: 200
@@ -245,3 +249,6 @@ Outputs:
   WebURL:
     Description: 公開URL（CloudFront）
     Value: !Sub "https://${WebDistribution.DomainName}"
+  WebDistributionId:
+    Description: CloudFrontディストリビューションID（キャッシュ無効化に使う）
+    Value: !Ref WebDistribution
