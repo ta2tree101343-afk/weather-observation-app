@@ -51,7 +51,7 @@ Resources:
   # ----------------------------------------------------------
   # wards.py（23区の対応表）を1か所にまとめ、収集・閲覧の両Lambdaから使う。
   # ContentUri配下の python/ の中身が、各Lambdaで import 可能になる。
-  # （src/layers/common/python/wards.py → どちらも from wards import WARDS）
+  # （src/layers/common/python/wards.py → 収集Lambdaは from wards import WARDS、閲覧Lambdaは import wards としてモジュール関数を呼ぶ）
   # ==========================================================
   CommonLayer:
     Type: AWS::Serverless::LayerVersion
