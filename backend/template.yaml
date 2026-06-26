@@ -2,8 +2,6 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
   東京都の気象データ収集アプリ（バックエンド）
-  フェーズ①: DynamoDB + Collector Lambda + EventBridge Scheduler
-  フェーズ②: 閲覧API（HTTP API + API Lambda）
 
 Parameters:
   AllowedOrigin:
@@ -24,12 +22,7 @@ Globals:
 
 Resources:
 
-  # ==========================================================
-  # データ保存先（DynamoDB）
-  # ----------------------------------------------------------
-  # SAMの SimpleTable は「PKのみ」でソートキーを持てないため、
-  # 複合キー(PK=区, SK=日時)が必要な今回は DynamoDB::Table を直接使う。
-  # ==========================================================
+  # SimpleTable は PK のみでソートキーを持てないため DynamoDB::Table を直接使う
   WeatherTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -46,13 +39,6 @@ Resources:
         - AttributeName: datetime
           KeyType: RANGE
 
-  # ==========================================================
-  # 共有Layer（共通コードの置き場）
-  # ----------------------------------------------------------
-  # wards.py（23区の対応表）を1か所にまとめ、収集・閲覧の両Lambdaから使う。
-  # ContentUri配下の python/ の中身が、各Lambdaで import 可能になる。
-  # （src/layers/common/python/wards.py → 収集Lambdaは from wards import WARDS、閲覧Lambdaは import wards としてモジュール関数を呼ぶ）
-  # ==========================================================
   CommonLayer:
     Type: AWS::Serverless::LayerVersion
     Properties:
@@ -61,9 +47,6 @@ Resources:
       CompatibleRuntimes:
         - python3.13
 
-  # ==========================================================
-  # 収集Lambda（Collector）— 書き込み役
-  # ==========================================================
   CollectorFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -87,12 +70,7 @@ Resources:
             ScheduleExpression: rate(1 hour)
             ScheduleExpressionTimezone: Asia/Tokyo
 
-  # ==========================================================
-  # 閲覧API の受付（API Gateway HTTP API）
-  # ----------------------------------------------------------
-  # HTTP APIはREST APIより安く、CORSをゲートウェイ側で自動処理してくれる。
-  # ブラウザのプリフライト(OPTIONS)もここが面倒を見る。
-  # ==========================================================
+  # HTTP API: REST API より安く、CORS（OPTIONS プリフライト含む）をゲートウェイ側で処理できる
   WeatherApi:
     Type: AWS::Serverless::HttpApi
     Properties:
@@ -105,13 +83,6 @@ Resources:
         AllowHeaders:
           - "*"
 
-  # ==========================================================
-  # 閲覧Lambda（API）— 読み取り役
-  # ----------------------------------------------------------
-  # GET /wards         … 区の一覧（画面のセレクタ用）
-  # GET /observations  … 指定区の観測データ（?ward=13109）
-  # 1つの関数で2ルートを受け、関数側でパスを見て処理を振り分ける。
-  # ==========================================================
   ApiFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -141,12 +112,6 @@ Resources:
             Method: GET
             Path: /observations
 
-  # ==========================================================
-  # アラート（Collector 部分失敗の検知）
-  # ----------------------------------------------------------
-  # FailedWardsCount > 0 のとき ALARM 状態になる。
-  # AlarmActions に SNS トピックの ARN を追加すると通知できる。
-  # ==========================================================
   CollectorPartialFailureAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -164,12 +129,7 @@ Resources:
       ComparisonOperator: GreaterThanOrEqualToThreshold
       TreatMissingData: notBreaching
 
-  # ==========================================================
-  # フロント配信（S3 + CloudFront）
-  # ----------------------------------------------------------
-  # ビルド済みフロント(dist)をS3に置き、CloudFront経由で配信する。
-  # S3は非公開のままにし、CloudFrontからのみ OAC で読ませる（直アクセス不可）。
-  # ==========================================================
+  # S3 は非公開のまま CloudFront OAC 経由でのみ読ませる（直アクセス不可）
   WebBucket:
     Type: AWS::S3::Bucket
     Properties:

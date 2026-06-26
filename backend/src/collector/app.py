@@ -1,13 +1,3 @@
-"""Collector Lambda（本実装）
-EventBridge Scheduler から1時間ごとに起動され、東京23区の観測データを
-weathernews.jp から取得して DynamoDB に保存する。
-
-設計のポイント:
-  - 1区が失敗しても全体を止めない（try/except で区ごとに処理）。
-  - 相手サーバへの負荷を避けるため、区ごとに少し待つ（SLEEP_SECONDS）。
-  - 同じ ward + datetime は上書きになるため、重複は自然に防げる。
-"""
-
 import os
 import time
 from decimal import Decimal
@@ -31,14 +21,12 @@ table = dynamodb.Table(TABLE_NAME)
 
 
 def to_decimal(value):
-    """DynamoDB の数値は Decimal で渡す必要がある（float は不可）。"""
     if value is None:
         return None
     return Decimal(str(value))
 
 
 def build_item(ward_code, ward_name, record):
-    """1レコードを DynamoDB の1アイテムに変換する。"""
     item = {
         "ward": ward_code,
         "datetime": record["datetime"],
