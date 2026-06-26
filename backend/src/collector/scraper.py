@@ -1,14 +1,3 @@
-"""weathernews.jp 観測値スクレイパー
-指定した区コードのページから、class="dataTable"（実況天気・観測値）を取得し、
-「日時・気温・風速・降水量（＋風向）」の構造化データに変換する。
-
-検証スクリプト parse_weather.py の心臓部（観測値テーブルの抽出と日付復元）を
-そのまま移植したもの。日付復元の考え方:
-  - 観測値テーブルは時刻欄に日付が無く "12時" "24時" のように時だけが入る。
-  - 行は新しい順なので、時が前の行より大きくなったら日付を前日へ繰り下げる。
-  - "24時" は 0:00 として扱う。
-"""
-
 from datetime import datetime, timedelta, timezone
 
 import requests
@@ -29,7 +18,6 @@ HEADERS = {
 
 
 def fetch_html(code, timeout=15):
-    """区コードのページHTMLを取得する。失敗時は例外を送出。"""
     url = BASE_URL.format(code=code)
     res = requests.get(url, headers=HEADERS, timeout=timeout)
     res.raise_for_status()
@@ -37,7 +25,6 @@ def fetch_html(code, timeout=15):
 
 
 def to_float(text):
-    """数値文字列をfloatに。'-' '--' 空欄などは None。"""
     text = (text or "").strip()
     if text in ("", "-", "--", "―", "−"):
         return None
@@ -48,7 +35,6 @@ def to_float(text):
 
 
 def parse_observation_table(html, base_date=None):
-    """観測値テーブルを解析して辞書のリストを返す（新しい順）。"""
     soup = BeautifulSoup(html, "html.parser")
     table = soup.select_one("table.dataTable")
     if table is None:
@@ -72,17 +58,14 @@ def parse_observation_table(html, base_date=None):
         if not digits:
             continue
         hour = int(digits)
-        if hour == 24:  # 24時 = 0:00
+        if hour == 24:
             hour = 0
 
         if first:
-            # 最新行の時刻が base_date の現在時刻より後なら、その行はまだ来ていない
-            # = 起点は前日（例: 00:30 に最新行が "23時" → 昨日23:00）
             if hour > base_date.hour:
                 current_date -= timedelta(days=1)
             first = False
         elif prev_hour is not None and hour > prev_hour:
-            # 新しい→古い順なので、時が前の行より大きくなったら日付を前日へ
             current_date -= timedelta(days=1)
         prev_hour = hour
 
@@ -92,11 +75,11 @@ def parse_observation_table(html, base_date=None):
 
         records.append(
             {
-                "datetime": dt.isoformat(),  # 例: 2026-06-20T12:00:00+09:00
-                "temperature": to_float(cells[1]),  # 気温(℃)
-                "wind_speed": to_float(cells[2]),  # 風速(m/s)
-                "wind_direction": cells[3] or None,  # 風向
-                "precipitation": to_float(cells[4]),  # 降水量(mm/h)
+                "datetime": dt.isoformat(),
+                "temperature": to_float(cells[1]),
+                "wind_speed": to_float(cells[2]),
+                "wind_direction": cells[3] or None,
+                "precipitation": to_float(cells[4]),
             }
         )
 
@@ -104,6 +87,5 @@ def parse_observation_table(html, base_date=None):
 
 
 def scrape_ward(code, base_date=None):
-    """区コードを渡すと、その区の観測データ（新しい順）を返す。"""
     html = fetch_html(code)
     return parse_observation_table(html, base_date=base_date)

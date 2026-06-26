@@ -1,9 +1,3 @@
-"""閲覧API Lambda
-HTTP API から呼ばれ、パスに応じて2種類の応答を返す。
-  GET /wards                     … 23区の一覧
-  GET /observations?ward=13109   … 指定区の観測データ（新しい順）
-"""
-
 import json
 import os
 
