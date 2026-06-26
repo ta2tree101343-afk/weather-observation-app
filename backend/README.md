@@ -5,36 +5,21 @@ AWS SAM で構成するバックエンド。Lambda 2 本（収集・閲覧）+ D
 ## ローカルセットアップ
 
 ```bash
-uv sync      # .venv を作成し全依存をインストール
-make test    # 全テストが passed であることを確認
+uv sync    # .venv を作成し全依存をインストール
+make test  # 全テストが passed であることを確認
 ```
 
-### よく使うコマンド
+## コマンド一覧
 
-```bash
-make test      # テスト実行
-make sync      # 依存の再インストール
-make compile   # pyproject.toml 変更後に requirements.txt を再生成
-```
-
-### ローカルで Lambda を動かす
-
-```bash
-sam build
-
-# 閲覧 API をローカル起動（http://localhost:3000）
-sam local start-api
-
-# 収集 Lambda を 1 回だけ手動実行
-sam local invoke CollectorFunction
-```
-
-## デプロイ（バックエンド）
-
-```bash
-sam build
-sam deploy
-```
+| コマンド | 説明 |
+| --- | --- |
+| `make test` | テスト実行 |
+| `make sync` | 依存の再インストール（uv.lock に従う） |
+| `make compile` | `pyproject.toml` 変更後に `requirements.txt` を再生成 |
+| `sam build` | Lambda パッケージをビルド |
+| `sam deploy` | AWS にデプロイ |
+| `sam local start-api` | 閲覧 API をローカル起動<http://localhost:3000> |
+| `sam local invoke CollectorFunction` | 収集 Lambda を 1 回だけ手動実行 |
 
 ## ディレクトリ構成
 
